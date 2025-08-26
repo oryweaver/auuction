@@ -1,0 +1,96 @@
+{# Reusable signup section partial. Expects context: item, can_signup, user_signup, spots_left #}
+{% include 'auctions/partials/messages_oob.html' %}
+{% if can_signup %}
+  <section id="signup-section">
+    <h3>Sign Up</h3>
+    <p><strong>Capacity:</strong> {{ item.quantity_sold|default:0 }} / {{ item.quantity_total|default:0 }}</p>
+    <p><strong>Spots left:</strong> {{ spots_left }}</p>
+    {% if request.user.is_authenticated %}
+      {% if user_signup %}
+        {% if user_signup.waitlisted %}
+          <p>You are currently waitlisted.</p>
+        {% else %}
+          <p>Your signup is confirmed{% if user_signup.quantity and user_signup.quantity > 1 %} ({{ user_signup.quantity }} seats){% endif %}.</p>
+          <form method="post" action="{% url 'auctions:fixed_price_adjust' slug=item.slug %}"
+                hx-post="{% url 'auctions:fixed_price_adjust' slug=item.slug %}"
+                hx-target="#signup-section" hx-swap="outerHTML" style="margin-top: .5rem">
+            {% csrf_token %}
+            {% with max_allowed=user_signup.quantity|add:spots_left %}
+              <label for="adjust-seats-input">Adjust seats:</label>
+              <input
+                id="adjust-seats-input"
+                type="number"
+                name="quantity"
+                min="1"
+                value="{{ user_signup.quantity|default:1 }}"
+                {% if max_allowed %}max="{{ max_allowed }}"{% endif %}
+                aria-describedby="adjust-help adjust-error"
+                data-current="{{ user_signup.quantity|default:1 }}"
+                {% if max_allowed %}data-max="{{ max_allowed }}"{% endif %}
+                style="width:6rem"
+              >
+              <div id="adjust-help" style="font-size:.9em; color:#555; margin-top:.25rem;">
+                {% if max_allowed %}Max you can set: {{ max_allowed }} (includes your current seats + spots left).{% endif %}
+              </div>
+              <div id="adjust-error" style="display:none; font-size:.9em; color:#b00020; margin-top:.25rem;"></div>
+            {% endwith %}
+            <button id="adjust-submit" type="submit" disabled>Update</button>
+          </form>
+          <script>
+            (function() {
+              var input = document.getElementById('adjust-seats-input');
+              var btn = document.getElementById('adjust-submit');
+              if (!input || !btn) return;
+              function refreshState() {
+                var current = parseInt(input.getAttribute('data-current') || '1', 10);
+                var maxAttr = input.getAttribute('max');
+                var max = maxAttr ? parseInt(maxAttr, 10) : null;
+                var val = parseInt(input.value || '1', 10);
+                var error = document.getElementById('adjust-error');
+                var hasError = false;
+                if (max !== null && val > max) {
+                  hasError = true;
+                  if (error) {
+                    error.style.display = 'block';
+                    error.textContent = 'You cannot request more than ' + max + ' seats.';
+                  }
+                } else if (val < 1) {
+                  hasError = true;
+                  if (error) {
+                    error.style.display = 'block';
+                    error.textContent = 'Quantity must be at least 1.';
+                  }
+                } else {
+                  if (error) {
+                    error.style.display = 'none';
+                    error.textContent = '';
+                  }
+                }
+                btn.disabled = hasError || (val === current);
+              }
+              input.addEventListener('input', refreshState);
+              input.addEventListener('change', refreshState);
+              refreshState();
+            })();
+          </script>
+        {% endif %}
+        <form method="post" action="{% url 'auctions:fixed_price_cancel' slug=item.slug %}"
+              hx-post="{% url 'auctions:fixed_price_cancel' slug=item.slug %}"
+              hx-target="#signup-section" hx-swap="outerHTML">
+          {% csrf_token %}
+          <button type="submit">Cancel Signup</button>
+        </form>
+      {% else %}
+        <form method="post" action="{% url 'auctions:fixed_price_signup' slug=item.slug %}"
+              hx-post="{% url 'auctions:fixed_price_signup' slug=item.slug %}"
+              hx-target="#signup-section" hx-swap="outerHTML">
+          {% csrf_token %}
+          <label>Quantity: <input type="number" name="quantity" min="1" value="1" {% if spots_left %}max="{{ spots_left }}"{% endif %}></label>
+          <button type="submit">Sign Up</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <p><a href="{% url 'auctions:login' %}">Log in</a> to sign up.</p>
+    {% endif %}
+  </section>
+{% endif %}

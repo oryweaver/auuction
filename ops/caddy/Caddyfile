@@ -1,0 +1,29 @@
+auuction.org, www.auuction.org {
+  encode gzip zstd
+  @static path /static/* /assets/* /staticfiles/*
+  handle @static {
+    root * /var/www/static
+    file_server
+  }
+  reverse_proxy web:8000
+  log {
+    output stdout
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer-when-downgrade"
+  }
+}
+
+# Local/dev fallback host (adjust as needed)
+:8080 {
+  encode gzip zstd
+  reverse_proxy web:8000
+}
+
+# Explicit HTTP site for LAN IP to prevent auto-HTTPS redirect
+http://192.168.1.72 {
+  encode gzip zstd
+  reverse_proxy web:8000
+}

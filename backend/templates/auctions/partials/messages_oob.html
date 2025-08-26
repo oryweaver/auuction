@@ -1,0 +1,8 @@
+{# HTMX out-of-band (OOB) flash messages. Requires base to have id="flash-messages" #}
+{% if messages %}
+  <div id="flash-messages" class="messages" hx-swap-oob="true">
+    {% for message in messages %}
+      <div class="msg {% if message.tags %}msg-{{ message.tags }}{% endif %}">{{ message }}</div>
+    {% endfor %}
+  </div>
+{% endif %}

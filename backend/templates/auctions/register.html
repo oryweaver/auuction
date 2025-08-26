@@ -1,0 +1,63 @@
+{% extends "auctions/_auth_base.html" %}
+{% block title %}Create account{% endblock %}
+{% block header %}
+  <h1>Create account</h1>
+  <p class="muted">Enter your details to get started. You'll be signed in right after registration.</p>
+{% endblock %}
+{% block content %}
+  <form method="post" novalidate>
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="errorlist">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="field">
+      <label for="id_email">Email</label>
+      {{ form.email }}
+      {% if form.email.errors %}
+        <div class="errorlist">{{ form.email.errors }}</div>
+      {% endif %}
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="id_first_name">First name</label>
+        {{ form.first_name }}
+        {% if form.first_name.errors %}
+          <div class="errorlist">{{ form.first_name.errors }}</div>
+        {% endif %}
+      </div>
+      <div class="field">
+        <label for="id_last_name">Last name</label>
+        {{ form.last_name }}
+        {% if form.last_name.errors %}
+          <div class="errorlist">{{ form.last_name.errors }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        <label for="id_password">Password</label>
+        {{ form.password }}
+        {% if form.password.errors %}
+          <div class="errorlist">{{ form.password.errors }}</div>
+        {% endif %}
+      </div>
+      <div class="field">
+        <label for="id_password_confirm">Confirm password</label>
+        {{ form.password_confirm }}
+        {% if form.password_confirm.errors %}
+          <div class="errorlist">{{ form.password_confirm.errors }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="actions">
+      <button type="submit">Create account</button>
+      <span class="muted">Already have an account?</span>
+      <a href="{% url 'auctions:login' %}">Sign in</a>
+    </div>
+  </form>
+{% endblock %}

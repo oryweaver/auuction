@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}TVUUC Auction{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" integrity="sha384-2I+x1QV5D9H6y+O8P3Dg6M4qvL9S0q1G5C3m0f0m8c8h2P3zqZ9V8iK8O7M9b2z1" crossorigin="anonymous"></script>
+  <style>
+    header { margin: 1rem 0; }
+    .category { margin-top: 2rem; }
+    .item-card { border: 1px solid #e5e7eb; padding: 1rem; border-radius: .5rem; }
+    .topnav { display:flex; gap:1rem; align-items:center; justify-content:space-between; }
+    .messages { margin: 1rem 0; }
+    .messages .msg { padding:.5rem .75rem; border-radius:.25rem; margin-bottom:.5rem; }
+    .msg-success { background:#ecfdf5; color:#065f46; }
+    .msg-error { background:#fee2e2; color:#991b1b; }
+    .msg-info { background:#eff6ff; color:#1e3a8a; }
+
+    /* Account dropdown */
+    details.dropdown { position: relative; }
+    details.dropdown > summary {
+      list-style: none;
+      cursor: pointer;
+      padding: .4rem .6rem;
+      border: 1px solid #e5e7eb;
+      border-radius: .5rem;
+      background: #f9fafb;
+      font-weight: 600;
+    }
+    .summary-user { display:flex; align-items:center; gap:.5rem; }
+    .avatar { width: 28px; height: 28px; border-radius: 9999px; border: 1px solid #e5e7eb; background: #e5e7eb; object-fit: cover; }
+    details.dropdown[open] > summary::marker,
+    details.dropdown > summary::marker { display: none; }
+    details.dropdown > ul {
+      position: absolute;
+      right: 0;
+      top: calc(100% + .25rem);
+      background: var(--card-background-color, #fff);
+      border: 1px solid #e5e7eb;
+      border-radius: .375rem;
+      min-width: 18rem; /* base width */
+      width: max-content; /* expand to fit longest item */
+      padding: .25rem 0;
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1);
+      z-index: 50;
+    }
+    details.dropdown > ul li { list-style: none; }
+    /* Strong overrides against Pico nav link truncation */
+    nav details.dropdown > ul a,
+    nav details.dropdown > ul button,
+    .topnav nav details.dropdown > ul a,
+    .topnav nav details.dropdown > ul button {
+      display:block;
+      padding:.6rem .9rem; /* larger tap area */
+      text-decoration:none;
+      color:inherit;
+      width: auto !important;
+      max-width:none !important;
+      inline-size:auto !important;
+      text-align:left;
+      background:none;
+      border:0;
+      white-space: nowrap !important; /* prevent label truncation */
+      overflow: visible !important;
+      text-overflow: clip !important;
+      font-weight: 500;
+      min-width: 12rem; /* ensure tap target width */
+    }
+    details.dropdown > ul a:hover,
+    details.dropdown > ul a:focus { background:#f3f4f6; outline: none; }
+    details.dropdown > summary:focus { outline: 2px solid #93c5fd; outline-offset: 2px; }
+    .menu-divider { height:1px; background:#e5e7eb; margin:.25rem 0; }
+
+    /* HTMX swap animations */
+    #signup-section.htmx-added { opacity: 0; }
+    #signup-section.htmx-settling { transition: opacity 200ms ease-in; opacity: 1; }
+    #signup-section.htmx-swapping { transition: opacity 150ms ease-out; opacity: 0; }
+
+    #flash-messages.htmx-added { opacity: 0; transform: translateY(-4px); }
+    #flash-messages.htmx-settling { transition: opacity 200ms ease-in, transform 200ms ease-in; opacity: 1; transform: translateY(0); }
+    #flash-messages.htmx-swapping { transition: opacity 150ms ease-out, transform 150ms ease-out; opacity: 0; transform: translateY(-4px); }
+
+    /* Auto-dismiss animation */
+    .msg.fade-out { transition: opacity 250ms ease-out, max-height 250ms ease-out, margin 250ms ease-out, padding 250ms ease-out; opacity: 0; max-height: 0; margin: 0; padding: 0 .75rem; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <header class="container">
+    <div class="topnav">
+      <hgroup>
+        <h1><a href="/">TVUUC Auction</a></h1>
+        <p>{% block subtitle %}{% endblock %}</p>
+      </hgroup>
+      <nav>
+        {% if request.user.is_authenticated %}
+          {% load auctions_extras %}
+          <details class="dropdown">
+            <summary>
+              <span class="summary-user">
+                <img src="{% user_avatar_url request.user 48 %}" alt="" class="avatar" loading="lazy" decoding="async"/>
+                <span>{{ request.user.first_name|default:request.user.email }}</span>
+                <span>▾</span>
+              </span>
+            </summary>
+            <ul role="list">
+              <li><a href="{% url 'auctions:profile_complete' %}">Profile</a></li>
+              <li><a href="{% url 'auctions:donor_item_create' %}">Submit Item</a></li>
+              <li><a href="{% url 'auctions:account_home' %}">Statements</a></li>
+              <li><a href="{% url 'auctions:account_home' %}">Account</a></li>
+              <li class="menu-divider"></li>
+              {% if request.user|is_manager %}
+                <li><a href="{% url 'auctions:manager_home' %}">Manage</a></li>
+              {% endif %}
+              {% if request.user.is_staff %}
+                <li><a href="/admin/">Admin</a></li>
+              {% endif %}
+              <li class="menu-divider"></li>
+              <li><a href="{% url 'auctions:logout' %}">Logout</a></li>
+            </ul>
+          </details>
+        {% else %}
+          <a href="{% url 'auctions:login' %}">Login</a>
+          <a href="{% url 'auctions:register' %}">Register</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+  <main class="container">
+    {% if messages %}
+      <div id="flash-messages" class="messages">
+        {% for message in messages %}
+          <div class="msg {% if message.tags %}msg-{{ message.tags }}{% endif %}">{{ message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    (function(){
+      function scheduleDismiss(container){
+        if(!container) return;
+        var msgs = container.querySelectorAll('.msg');
+        msgs.forEach(function(msg){
+          // Avoid rescheduling
+          if (msg.dataset.dismissScheduled) return;
+          msg.dataset.dismissScheduled = '1';
+          setTimeout(function(){
+            msg.classList.add('fade-out');
+            // remove from DOM after transition
+            setTimeout(function(){ if (msg && msg.parentNode) msg.parentNode.removeChild(msg); }, 300);
+          }, 3500);
+        });
+      }
+      // Initial load
+      scheduleDismiss(document.getElementById('flash-messages'));
+      // On HTMX swaps, re-schedule for updated messages
+      document.body.addEventListener('htmx:afterSwap', function(evt){
+        var tgt = evt.target;
+        if (!tgt) return;
+        if (tgt.id === 'flash-messages' || tgt.querySelector && tgt.querySelector('#flash-messages')){
+          var container = tgt.id === 'flash-messages' ? tgt : tgt.querySelector('#flash-messages');
+          scheduleDismiss(container);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

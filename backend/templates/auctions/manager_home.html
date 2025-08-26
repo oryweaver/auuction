@@ -1,0 +1,15 @@
+{% extends "auctions/base.html" %}
+{% block subtitle %}Manager{% endblock %}
+{% block content %}
+<article>
+  <header>
+    <h2>Manager Dashboard</h2>
+    <p>Quick links for auction management.</p>
+  </header>
+  <ul>
+    <li><a href="{% url 'auctions:catalog_list' %}">View Catalog</a></li>
+    <li><a href="{% url 'auctions:manager_approvals' %}">Approve Draft Items</a></li>
+    <!-- Add more manager tools/links here as they are implemented -->
+  </ul>
+</article>
+{% endblock %}

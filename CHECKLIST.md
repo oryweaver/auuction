@@ -1,0 +1,40 @@
+# Implementation and Test Checklist
+
+- [x] Project infra
+  - [x] pytest + pytest-django + coverage configured
+  - [x] CI workflow runs tests on push
+- [x] Smoke
+  - [x] Containers healthy, /health/ 200, admin login works
+- [x] Domain models
+  - [x] Auction/Category/Item models and admin
+  - [x] Model tests (constraints, choices)
+- [x] Catalog
+  - [x] Home lists categories with published items
+  - [x] Item detail by slug, 404 when missing
+- [ ] Users/auth
+  - [x] Registration + email-based login
+  - [ ] Role permissions for donor/manager/admin
+- [x] Donor flow
+  - [x] Propose/edit draft item; validations; owner-only edit
+- [x] Publishing workflow
+  - [x] Draft → Published guard; restricted edits after publish
+- [x] Bidding
+  - [x] Place bid; increment/min; idempotency
+- [x] Fixed-price signups
+  - [x] Capacity decrement; waitlist promotion
+- [ ] Reoffer phase
+  - [ ] Window enforcement; opt-out respected
+- [ ] Notifications
+  - [ ] SMTP send and templates
+- [ ] Settlement
+  - [ ] Winners/commitments; receipts/export
+- [ ] Fulfillment
+  - [ ] Attendee list; host messaging; reminders
+- [ ] Reports/Exports
+  - [ ] Finance reconciliation CSVs
+- [ ] Security
+  - [ ] Rate limits; staff-only admin; CSP
+- [ ] DX/Seed
+  - [ ] Fixtures and management commands
+- [ ] Deployment checks
+  - [ ] TLS, HSTS, backups cron, email deliverability

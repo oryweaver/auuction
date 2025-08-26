@@ -1,0 +1,66 @@
+{% extends 'auctions/base.html' %}
+{% block subtitle %}Complete your profile{% endblock %}
+{% block content %}
+<section class="container">
+  <h2>Complete your profile</h2>
+  <p>Please provide your phone and mailing address. This helps with coordination for hosted events and fulfillment.</p>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="grid">
+      <div>
+        <label>Avatar</label>
+        <div style="display:flex; align-items:center; gap:1rem">
+          {% load auctions_extras %}
+          <img src="{% user_avatar_url request.user 96 %}" alt="" style="width:64px;height:64px;border-radius:50%;border:1px solid #e5e7eb;object-fit:cover"/>
+          <div style="flex:1">
+            {{ form.image }}
+            {% if form.image.errors %}<small class="msg-error">{{ form.image.errors|striptags }}</small>{% endif %}
+            <small>PNG/JPG, square recommended. New upload replaces existing.</small>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="grid">
+      <div>
+        <label for="id_phone">Phone</label>
+        {{ form.phone }}
+        {% if form.phone.errors %}<small class="msg-error">{{ form.phone.errors|striptags }}</small>{% endif %}
+      </div>
+      <div>
+        <label for="id_address_line1">Address line 1</label>
+        {{ form.address_line1 }}
+        {% if form.address_line1.errors %}<small class="msg-error">{{ form.address_line1.errors|striptags }}</small>{% endif %}
+      </div>
+      <div>
+        <label for="id_address_line2">Address line 2</label>
+        {{ form.address_line2 }}
+        {% if form.address_line2.errors %}<small class="msg-error">{{ form.address_line2.errors|striptags }}</small>{% endif %}
+      </div>
+      <div>
+        <label for="id_city">City</label>
+        {{ form.city }}
+        {% if form.city.errors %}<small class="msg-error">{{ form.city.errors|striptags }}</small>{% endif %}
+      </div>
+      <div>
+        <label for="id_state">State</label>
+        {{ form.state }}
+        {% if form.state.errors %}<small class="msg-error">{{ form.state.errors|striptags }}</small>{% endif %}
+      </div>
+      <div>
+        <label for="id_postal_code">Postal code</label>
+        {{ form.postal_code }}
+        {% if form.postal_code.errors %}<small class="msg-error">{{ form.postal_code.errors|striptags }}</small>{% endif %}
+      </div>
+      <div>
+        <label for="id_country">Country</label>
+        {{ form.country }}
+        {% if form.country.errors %}<small class="msg-error">{{ form.country.errors|striptags }}</small>{% endif %}
+      </div>
+    </div>
+    <div style="margin-top:1rem">
+      <button type="submit">Save profile</button>
+      <a href="{% url 'auctions:account_home' %}" role="button" class="secondary">Skip for now</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

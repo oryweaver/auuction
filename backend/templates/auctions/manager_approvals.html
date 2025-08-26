@@ -1,0 +1,53 @@
+{% extends "auctions/base.html" %}
+{% block subtitle %}Approvals{% endblock %}
+{% block content %}
+<article>
+  <header>
+    <h2>Draft Items Awaiting Approval</h2>
+    <p>Managers and admins can review and publish items submitted by donors.</p>
+  </header>
+
+  {% if items %}
+    <div class="items">
+      {% for item in items %}
+      <section class="card" style="margin-bottom:1.25rem; padding:1rem; border:1px solid #ddd; border-radius:8px;">
+        <header style="display:flex; gap:1rem; align-items:flex-start;">
+          <div style="width:160px; flex:0 0 160px;">
+            {% if item.image %}
+              <img src="{{ item.image.url }}" alt="{{ item.title }}" style="max-width:160px; height:auto; border-radius:6px; object-fit:cover;"/>
+            {% else %}
+              <div style="width:160px; height:120px; background:#f3f3f3; color:#888; display:flex; align-items:center; justify-content:center; border-radius:6px;">No Image</div>
+            {% endif %}
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:0.9rem; color:#666; margin-bottom:0.25rem;">
+              {{ item.get_type_display }} · {{ item.category|default:"Uncategorized" }} · Donor: {{ item.donor|default:"—" }} · Created {{ item.created_at|date:"Y-m-d H:i" }}
+            </div>
+            <form method="post" action="{% url 'auctions:manager_update_item' slug=item.slug %}">
+              {% csrf_token %}
+              <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                <input type="text" name="title" value="{{ item.title }}" class="input" placeholder="Title" />
+                <textarea name="description" rows="3" class="textarea" placeholder="Description">{{ item.description }}</textarea>
+                <textarea name="restrictions" rows="2" class="textarea" placeholder="Restrictions">{{ item.restrictions }}</textarea>
+              </div>
+              <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+                <button type="submit" class="btn btn-sm">Save</button>
+                <a class="btn btn-sm" href="{% url 'auctions:item_detail' slug=item.slug %}">Preview</a>
+              </div>
+            </form>
+          </div>
+          <div style="flex:0 0 auto;">
+            <form method="post" action="{% url 'auctions:manager_publish_item' slug=item.slug %}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-primary">Publish</button>
+            </form>
+          </div>
+        </header>
+      </section>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No draft items at the moment.</p>
+  {% endif %}
+</article>
+{% endblock %}

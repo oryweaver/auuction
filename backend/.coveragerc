@@ -1,0 +1,7 @@
+[run]
+source = config, auctions
+omit = */migrations/*
+
+[report]
+show_missing = True
+skip_empty = True

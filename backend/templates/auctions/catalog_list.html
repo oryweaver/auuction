@@ -1,0 +1,33 @@
+{% extends "auctions/base.html" %}
+{% block title %}Catalog{% endblock %}
+{% block subtitle %}Browse items by category{% endblock %}
+{% block content %}
+  {% for cat in categories %}
+    <section class="category">
+      <details open>
+        <summary style="cursor:pointer;">
+          <h2 id="{{ cat.slug }}" style="display:inline;">{{ cat.name }}</h2>
+          <span style="color:#666; margin-left:.5rem;">({{ cat.published_items|length|default:0 }})</span>
+        </summary>
+        {% if cat.published_items %}
+          <div class="grid" style="margin-top:.75rem;">
+            {% for item in cat.published_items %}
+              <article class="item-card">
+                {% if item.image %}
+                  <a href="{% url 'auctions:item_detail' slug=item.slug %}">
+                    <img src="{{ item.image.url }}" alt="{{ item.title }}" style="max-width:140px; max-height:140px; width:auto; height:auto; object-fit:cover; display:block; margin-bottom:.5rem;">
+                  </a>
+                {% endif %}
+                <header><h3><a href="{% url 'auctions:item_detail' slug=item.slug %}">{{ item.title }}</a></h3></header>
+                <p>{{ item.description|truncatechars:140 }}</p>
+                {% if item.buy_now_price %}<p><strong>Buy Now:</strong> ${{ item.buy_now_price }}</p>{% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p style="margin-top:.5rem;"><em>No items published in this category yet.</em></p>
+        {% endif %}
+      </details>
+    </section>
+  {% endfor %}
+{% endblock %}
