@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404, render
-from django.db.models import Prefetch, Sum
+from django.db.models import Prefetch, Sum, Q
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -13,12 +13,21 @@ from .utils import unique_slug, is_manager, standard_increment, manager_required
 
 
 def catalog_list(request):
+    q = (request.GET.get("q") or "").strip()
     categories = Category.objects.filter(active=True).order_by("sort_order", "name")
     items = (
         Item.objects.select_related("auction", "category")
         .filter(status=Item.STATUS_PUBLISHED)
         .order_by("title")
     )
+    if q:
+        items = items.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(restrictions__icontains=q)
+            | Q(category__name__icontains=q)
+        )
+        categories = categories.filter(items__in=items).distinct()
     # Prefetch items per category for simple grouped display
     categories = categories.prefetch_related(
         Prefetch(
@@ -27,7 +36,13 @@ def catalog_list(request):
             to_attr="published_items",
         )
     )
-    return render(request, "auctions/catalog_list.html", {"categories": categories})
+    ctx = {"categories": categories, "q": q}
+    if q:
+        try:
+            ctx["results_count"] = items.count()
+        except Exception:
+            ctx["results_count"] = None
+    return render(request, "auctions/catalog_list.html", ctx)
 
 
 def item_detail(request, slug):

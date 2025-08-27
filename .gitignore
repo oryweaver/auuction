@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtualenvs
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Django
+db.sqlite3
+media/
+backend/media/
+staticfiles/
+backend/staticfiles/
+collected_static/
+*.log
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Tests / Coverage / Caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.cache/
+nose2-*.xml
+nosetests.xml
+coverage.xml
+junit*.xml
+
+# Type checkers / Linters
+.mypy_cache/
+.pyre/
+.pytype/
+ruff_cache/
+
+# IDE / Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+*.local.yml
+.env.docker
+
+# Backups / dumps
+backups/
+dump.rdb
+
+# Node (if any)
+node_modules/
+dist/
+build/

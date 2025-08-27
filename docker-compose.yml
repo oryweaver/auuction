@@ -23,7 +23,8 @@ services:
     volumes:
       - media:/app/media
       - static_assets:/app/staticfiles
-    command: gunicorn config.wsgi:application -b 0.0.0.0:8000 -w 4
+    entrypoint: ["/app/entrypoint.sh"]
+    command: ["gunicorn", "config.wsgi:application", "-b", "0.0.0.0:8000", "-w", "4"]
 
   worker:
     build:

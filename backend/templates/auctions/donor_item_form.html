@@ -18,7 +18,7 @@
       <div>
         <label for="id_type">Type</label>
         {{ form.type }}
-        <small id="type-help" class="msg-info">Select whether this is a bidding item or a fixed-price signup.</small>
+        <small id="type-help" class="msg-info">Select the bidding item type. Fixed-price signups are created later by managers.</small>
         {% if form.type.errors %}<small class="msg-error">{{ form.type.errors|striptags }}</small>{% endif %}
       </div>
     </div>
@@ -60,10 +60,37 @@
         {% if form.opening_min_bid.errors %}<small class="msg-error">{{ form.opening_min_bid.errors|striptags }}</small>{% endif %}
         <small class="msg-info">Bid increments are calculated automatically.</small>
       </div>
+      <div id="buy-now-fields" style="display:flex; flex-direction:column; gap:.25rem;">
+        <div style="display:flex; align-items:end; gap:.5rem; flex-wrap:wrap;">
+          <div style="display:flex; flex-direction:column;">
+            <label for="id_buy_now_price">Buy-It-Now price</label>
+            {{ form.buy_now_price }}
+          </div>
+        </div>
+        {% if form.buy_now_price.errors %}<small class="msg-error">{{ form.buy_now_price.errors|striptags }}</small>{% endif %}
+        <small class="msg-info">Defaults to the opening minimum bid if left blank.</small>
+        <label style="margin-top:.25rem;">
+          {{ form.enable_buy_now }} Offer Buy-It-Now option (if not sold durring bidding period)
+        </label>
+      </div>
     </div>
 
     <fieldset id="event-location" style="margin-top: .5rem;">
-      <legend>Event Location</legend>
+      <legend>Event Details</legend>
+      <div class="grid">
+        <div>
+          <label for="id_event_starts_at">Event start</label>
+          {{ form.event_starts_at }}
+          {% if form.event_starts_at.errors %}<small class="msg-error">{{ form.event_starts_at.errors|striptags }}</small>{% endif %}
+        </div>
+        <div>
+          <label for="id_event_ends_at">Event end</label>
+          {{ form.event_ends_at }}
+          {% if form.event_ends_at.errors %}<small class="msg-error">{{ form.event_ends_at.errors|striptags }}</small>{% endif %}
+        </div>
+      </div>
+      <small class="msg-info">Start and end are optional for donors; managers can finalize later.</small>
+      <legend style="margin-top:.5rem;">Event Location</legend>
       <label>
         {{ form.at_church }} Held at the church
       </label>
@@ -112,8 +139,23 @@
       var customLoc = byId('custom-location');
       if (customLoc) customLoc.style.display = (t === 'event' && atChurch && !atChurch.checked) ? '' : 'none';
     }
-    document.addEventListener('change', function(e){ if(e.target && (e.target.id === 'id_type' || e.target.id === 'id_at_church')){ updateVisibility(); }});
-    document.addEventListener('DOMContentLoaded', updateVisibility);
+    function updateBuyNowState(){
+      var typeSel = document.getElementById('id_type');
+      var bidding = typeSel && (typeSel.value === 'good' || typeSel.value === 'service' || typeSel.value === 'event');
+      var cb = document.getElementById('id_enable_buy_now');
+      var price = document.getElementById('id_buy_now_price');
+      var bnWrap = byId('buy-now-fields');
+      if (bnWrap) bnWrap.style.display = bidding ? '' : 'none';
+      if (price) price.disabled = !(cb && cb.checked && bidding);
+    }
+    document.addEventListener('change', function(e){
+      if(!e.target) return;
+      if(e.target.id === 'id_type' || e.target.id === 'id_at_church' || e.target.id === 'id_enable_buy_now'){
+        updateVisibility();
+        updateBuyNowState();
+      }
+    });
+    document.addEventListener('DOMContentLoaded', function(){ updateVisibility(); updateBuyNowState(); });
   })();
   </script>
 {% endblock %}

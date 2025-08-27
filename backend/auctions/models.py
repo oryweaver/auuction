@@ -79,6 +79,10 @@ class Item(models.Model):
     location_address = models.TextField(blank=True)
     image = models.ImageField(upload_to="items/", null=True, blank=True)
 
+    # Hosted event scheduling (optional for donors; managers can finalize later)
+    event_starts_at = models.DateTimeField(null=True, blank=True)
+    event_ends_at = models.DateTimeField(null=True, blank=True)
+
     opening_min_bid = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     bid_increment = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     buy_now_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)

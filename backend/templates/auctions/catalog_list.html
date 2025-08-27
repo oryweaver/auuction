@@ -2,6 +2,14 @@
 {% block title %}Catalog{% endblock %}
 {% block subtitle %}Browse items by category{% endblock %}
 {% block content %}
+  <form role="search" method="get" action="" style="display:flex; gap:.5rem; align-items:center; max-width:640px; margin:.25rem 0 1rem;">
+    <input type="search" name="q" placeholder="Search by title, description, or category" value="{{ q|default:'' }}" aria-label="Search catalog" style="flex:1; padding:.4rem .6rem; font-size:.95rem; border-radius:.375rem; height:auto;">
+    <button type="submit" style="padding:.45rem .8rem; font-size:.9rem; line-height:1; border-radius:.375rem; white-space:nowrap;">Search</button>
+  </form>
+  {% if q %}
+    <p style="margin-top:.25rem; color:#555;">Results for <strong>“{{ q }}”</strong>{% if results_count is not None %}: {{ results_count }} item{% if results_count != 1 %}s{% endif %}{% endif %}. <a href="{% url 'auctions:catalog_list' %}">Clear</a></p>
+  {% endif %}
+  
   {% for cat in categories %}
     <section class="category">
       <details open>
@@ -29,5 +37,9 @@
         {% endif %}
       </details>
     </section>
+  {% empty %}
+    {% if q %}
+      <p style="margin-top:1rem;"><em>No results found for “{{ q }}”.</em> <a href="{% url 'auctions:catalog_list' %}">Clear search</a></p>
+    {% endif %}
   {% endfor %}
 {% endblock %}

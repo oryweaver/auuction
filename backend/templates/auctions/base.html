@@ -11,6 +11,13 @@
     .category { margin-top: 2rem; }
     .item-card { border: 1px solid #e5e7eb; padding: 1rem; border-radius: .5rem; }
     .topnav { display:flex; gap:1rem; align-items:center; justify-content:space-between; }
+    /* Brand */
+    .brand { display:flex; align-items:center; gap:.6rem; text-decoration:none; color:inherit; }
+    .brand-logo { width:40px; height:40px; object-fit:contain; }
+    .brand-text { line-height:1.1; }
+    .brand-title { font-weight:800; font-size:1.25rem; display:block; }
+    .brand-tagline { font-size:.85rem; color:#6b7280; display:block; }
+    .brand-wrap .brand-subtitle { margin:.15rem 0 0; color:#6b7280; font-size:.9rem; }
     .messages { margin: 1rem 0; }
     .messages .msg { padding:.5rem .75rem; border-radius:.25rem; margin-bottom:.5rem; }
     .msg-success { background:#ecfdf5; color:#065f46; }
@@ -86,11 +93,18 @@
   </style>
 </head>
 <body>
+  {% load static %}
   <header class="container">
     <div class="topnav">
-      <hgroup>
-        <h1><a href="/">TVUUC Auction</a></h1>
-        <p>{% block subtitle %}{% endblock %}</p>
+      <hgroup class="brand-wrap">
+        <a class="brand" href="/">
+          <img src="{% static 'auctions/brand-chalice.png' %}" alt="aUUction logo" class="brand-logo" loading="lazy" decoding="async" width="40" height="40" />
+          <span class="brand-text">
+            <span class="brand-title">aUUction</span>
+            <span class="brand-tagline">TVUUC’s Annual Auction</span>
+          </span>
+        </a>
+        <p class="brand-subtitle">{% block subtitle %}{% endblock %}</p>
       </hgroup>
       <nav>
         {% if request.user.is_authenticated %}
