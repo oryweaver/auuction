@@ -116,3 +116,5 @@ LOGOUT_REDIRECT_URL = 'auctions:catalog_list'
 # Custom user model (email as username)
 AUTH_USER_MODEL = 'accounts.User'
 
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+

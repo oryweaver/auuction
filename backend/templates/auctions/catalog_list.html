@@ -2,9 +2,21 @@
 {% block title %}Catalog{% endblock %}
 {% block subtitle %}Browse items by category{% endblock %}
 {% block content %}
-  <form role="search" method="get" action="" style="display:flex; gap:.5rem; align-items:center; max-width:640px; margin:.25rem 0 1rem;">
-    <input type="search" name="q" placeholder="Search by title, description, or category" value="{{ q|default:'' }}" aria-label="Search catalog" style="flex:1; padding:.4rem .6rem; font-size:.95rem; border-radius:.375rem; height:auto;">
-    <button type="submit" style="padding:.45rem .8rem; font-size:.9rem; line-height:1; border-radius:.375rem; white-space:nowrap;">Search</button>
+  <style>
+    /* Remove native search icons/clear buttons for a cleaner field */
+    input[type="search"] {
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input[type="search"]::-webkit-search-decoration,
+    input[type="search"]::-webkit-search-cancel-button,
+    input[type="search"]::-webkit-search-results-button,
+    input[type="search"]::-webkit-search-results-decoration {
+      display: none;
+    }
+  </style>
+  <form role="search" method="get" action="" style="display:flex; align-items:center; max-width:640px; margin:.25rem 0 1rem;">
+    <input type="search" name="q" value="{{ q|default:'' }}" aria-label="Search catalog" style="flex:1; padding:.4rem .6rem; font-size:.95rem; border-radius:.375rem; height:auto;">
   </form>
   {% if q %}
     <p style="margin-top:.25rem; color:#555;">Results for <strong>“{{ q }}”</strong>{% if results_count is not None %}: {{ results_count }} item{% if results_count != 1 %}s{% endif %}{% endif %}. <a href="{% url 'auctions:catalog_list' %}">Clear</a></p>
