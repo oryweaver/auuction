@@ -1,12 +1,36 @@
 {% if items %}
   <ul>
     {% for item in items %}
-      <li class="item-card" style="margin:.5rem 0;">
-        <strong><a href="{% url 'auctions:item_detail' slug=item.slug %}">{{ item.title }}</a></strong>
-        <div style="font-size:.9rem; color:#6b7280;">
-          {{ item.get_type_display }} · Status: {{ item.get_status_display }}
-          {% if item.category %} · {{ item.category.name }}{% endif %}
-          · You are currently the top bidder
+      <li class="item-card" style="margin:.75rem 0;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:1rem; flex-wrap:wrap;">
+          <div>
+            <strong><a href="{% url 'auctions:item_detail' slug=item.slug %}">{{ item.title }}</a></strong>
+            <div style="font-size:.9rem; color:#6b7280;">
+              {{ item.get_type_display }} · Status: {{ item.get_status_display }}
+              {% if item.category %} · {{ item.category.name }}{% endif %}
+              · You are currently winning {{ item.my_won_seats|default:1 }} seat(s)
+            </div>
+          </div>
+          <div style="text-align:right; min-width:16rem;">
+            <div style="font-size:.95rem;">
+              Current price: <strong>${{ item.current_price|default:"—" }}</strong>
+            </div>
+            <div style="font-size:.9rem; color:#6b7280;">
+              Your max: <strong>${{ item.my_max|default:"—" }}</strong>
+            </div>
+            <form
+              hx-post="{% url 'auctions:account_update_proxy_max' slug=item.slug %}"
+              hx-target="#account-tab-panel"
+              hx-swap="innerHTML"
+              method="post"
+              style="margin-top:.25rem; display:flex; gap:.25rem; align-items:center; justify-content:flex-end;"
+            >
+              {% csrf_token %}
+              <label style="font-size:.85rem; color:#374151;">Increase max</label>
+              <input type="number" name="amount" step="0.01" min="0" required style="width:8rem;">
+              <button type="submit" class="contrast">Update</button>
+            </form>
+          </div>
         </div>
       </li>
     {% endfor %}

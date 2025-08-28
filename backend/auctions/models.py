@@ -122,6 +122,28 @@ class Bid(models.Model):
         return f"Bid {self.amount} on {self.item_id} by {self.bidder_id}"
 
 
+class ProxyBid(models.Model):
+    """Stores a bidder's maximum (proxy) bid for an item.
+
+    There is at most one row per (item, bidder). The live "current price" is
+    derived from all proxy bids and standard increments.
+    """
+    item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='proxy_bids')
+    bidder = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='proxy_bids')
+    max_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    # Number of seats this bidder wants to win for this item (multi-quantity auctions)
+    seats = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = (("item", "bidder"),)
+        ordering = ['-max_amount', 'updated_at']
+
+    def __str__(self) -> str:
+        return f"ProxyBid max={self.max_amount} item={self.item_id} bidder={self.bidder_id}"
+
+
 class Signup(models.Model):
     item = models.ForeignKey(Item, on_delete=models.CASCADE, related_name='signups')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='signups')

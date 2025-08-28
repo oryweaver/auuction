@@ -35,6 +35,13 @@
     {% if can_bid %}
       <section>
         <h3>Bidding</h3>
+        {% if bid_seats_total %}
+          <p>
+            <strong>Seats:</strong>
+            {{ bid_seats_total }} total
+            · {{ bid_seats_available }} available without a bid yet
+          </p>
+        {% endif %}
         {% if top_bid %}
           <p><strong>Current top bid:</strong> ${{ top_bid.amount }}</p>
         {% else %}
@@ -43,7 +50,8 @@
         {% if request.user.is_authenticated %}
           <form method="post" action="{% url 'auctions:place_bid' slug=item.slug %}">
             {% csrf_token %}
-            <label>Amount: <input type="number" step="0.01" name="amount" required></label>
+            <label>Maximum bid (proxy): <input type="number" step="0.01" name="amount" required></label>
+            <label style="margin-left:1rem;">Quantity: <input type="number" name="quantity" min="1" {% if bid_seats_total %}max="{{ bid_seats_total }}"{% endif %} value="1"></label>
             <input type="hidden" name="idempotency_key" value="{{ request.session.session_key }}-{{ item.slug }}-bid">
             <button type="submit">Place Bid</button>
           </form>

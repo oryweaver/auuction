@@ -6,6 +6,7 @@ set -euo pipefail
 #   scripts/dev-rebuild.sh rebuild           # Build images for web/worker/beat and restart them
 #   scripts/dev-rebuild.sh up                # Start services (no rebuild)
 #   scripts/dev-rebuild.sh migrate           # Run Django migrations in web container
+#   scripts/dev-rebuild.sh migrate-host      # Run migrations with host bind-mount (no rebuild)
 #   scripts/dev-rebuild.sh makemigrations    # Make migrations for changed apps (inside container; not persisted if no mount)
 #   scripts/dev-rebuild.sh makemigrations-host # Make migrations with host bind-mount so files persist with correct ownership
 #   scripts/dev-rebuild.sh collectstatic     # Collect static files
@@ -103,6 +104,11 @@ case "$cmd" in
     run_in_web_hostbind python manage.py end_live_phase "$@"
     ;;
 
+  migrate-host)
+    ensure_env
+    run_in_web_hostbind python manage.py migrate --noinput
+    ;;
+
   collectstatic)
     ensure_env
     run_in_web python manage.py collectstatic --noinput
@@ -142,7 +148,7 @@ case "$cmd" in
 
   help|*)
     sed -n '1,80p' "$0" | sed -n '1,40p'
-    echo "\nCommands: rebuild | up | migrate | makemigrations | makemigrations-host | end-live | end-live-host | collectstatic | shell | logs [svc] | status | resetdb"
+    echo "\nCommands: rebuild | up | migrate | migrate-host | makemigrations | makemigrations-host | end-live | end-live-host | collectstatic | shell | logs [svc] | status | resetdb"
     ;;
 
 esac

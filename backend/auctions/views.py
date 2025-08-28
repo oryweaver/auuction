@@ -1,4 +1,6 @@
 from django.shortcuts import get_object_or_404, render
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Prefetch, Sum, Q, OuterRef, Subquery
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -64,11 +66,26 @@ def item_detail(request, slug):
             # Likely migrations missing for Signup in this environment
             user_signup = None
     top_bid = None
+    bid_seats_total = None
+    bid_seats_available = None
     if can_bid:
         try:
             top_bid = item.bids.order_by("-amount", "-created_at").first()
         except Exception:
             top_bid = None
+        # Show available seats without a bid yet (proxies placed)
+        try:
+            from .models import ProxyBid  # local import
+            bid_seats_total = max(1, int(item.quantity_total or 1))
+            # Sum of requested seats across all proxies
+            proxies = ProxyBid.objects.filter(item=item).values("seats")
+            requested = 0
+            for row in proxies:
+                requested += max(1, int(row.get("seats") or 1))
+            bid_seats_available = max(0, bid_seats_total - requested)
+        except Exception:
+            bid_seats_total = None
+            bid_seats_available = None
     # compute spots left for fixed-price items
     spots_left = 0
     try:
@@ -85,6 +102,8 @@ def item_detail(request, slug):
         "user_signup": user_signup,
         "top_bid": top_bid,
         "spots_left": spots_left,
+        "bid_seats_total": bid_seats_total,
+        "bid_seats_available": bid_seats_available,
     }
     return render(request, "auctions/item_detail.html", ctx)
 
@@ -98,64 +117,146 @@ def place_bid(request, slug):
         messages.error(request, "Bidding is not allowed on this item.")
         return redirect("auctions:item_detail", slug=item.slug)
 
-    # Parse amount
+    # Parse inputs: max amount (proxy max) and optional quantity
     raw_amount = (request.POST.get("amount") or "").strip()
     try:
-        amount = Decimal(raw_amount)
+        max_amount = Decimal(raw_amount)
     except Exception:
         messages.error(request, "Enter a valid bid amount.")
         return redirect("auctions:item_detail", slug=item.slug)
-
-    # Determine minimum required bid
     try:
-        top_bid = item.bids.order_by("-amount", "-created_at").first()
+        req_seats = int((request.POST.get("quantity") or "1").strip() or "1")
     except Exception:
-        top_bid = None
+        req_seats = 1
+    K_total = max(1, int(item.quantity_total or 1))
+    req_seats = max(1, min(req_seats, K_total))
 
-    min_required = None
-    if top_bid:
-        # Use explicit increment if provided, else a sensible standard increment
-        incr = item.bid_increment if item.bid_increment is not None else standard_increment(top_bid.amount)
-        min_required = (top_bid.amount or Decimal("0")) + Decimal(incr)
-    else:
-        # First bid must meet or exceed opening minimum if defined
-        if item.opening_min_bid is not None:
-            min_required = Decimal(item.opening_min_bid)
-        else:
-            min_required = Decimal("1.00")
+    # Helpers for proxy bidding
+    def get_increment(base: Decimal) -> Decimal:
+        return item.bid_increment if item.bid_increment is not None else standard_increment(base)
 
-    if amount < min_required:
-        messages.error(request, f"Bid must be at least {min_required}.")
-        return redirect("auctions:item_detail", slug=item.slug)
+    def compute_current_state(locked_item):
+        """Compute uniform-price outcome for multi-quantity items with seat-demand.
 
-    # Optional idempotency key to prevent duplicate submissions
-    idem = (request.POST.get("idempotency_key") or "").strip() or None
+        Returns (top_bidder, public_price, is_full, winners_map)
+        - Expand each proxy bid into `seats` unit-demand slots with same (max_amount, updated_at, bidder_id)
+        - Sort units by (-max_amount, updated_at asc).
+        - K = item.quantity_total (>=1)
+        - If #units <= K: price = opening, is_full=False, winners are all units.
+        - Else: price = min(Kth unit max, (K+1)th unit max + increment((K+1)th)), at least opening.
+        - winners_map is {bidder_id: seats_allocated} among top K units.
+        """
+        from .models import ProxyBid  # local import
+        proxies = list(
+            ProxyBid.objects.filter(item=locked_item).select_for_update().order_by("-max_amount", "updated_at")
+        )
+        opening = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
+        K = int(locked_item.quantity_total or 1)
+        K = max(1, K)
+        units = []  # list of tuples (max_amount:Decimal, updated_at, bidder_id)
+        for p in proxies:
+            seats = max(1, int(getattr(p, "seats", 1) or 1))
+            amt = Decimal(p.max_amount)
+            for _ in range(seats):
+                units.append((amt, p.updated_at, p.bidder_id))
+        if not units:
+            return None, opening, False, {}
+        # Sort by amount desc, time asc
+        units.sort(key=lambda t: (t[0] * -1, t[1]))
+        if len(units) <= K:
+            winners_map = {}
+            for _, __, bidder_id in units[:]:
+                winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+            # top bidder is the bidder_id of the highest unit
+            top_bidder = units[0][2]
+            return top_bidder, opening, False, winners_map
+        # More than K units
+        kth_max = Decimal(units[K - 1][0])
+        next_max = Decimal(units[K][0])
+        inc = Decimal(get_increment(next_max))
+        price = min(kth_max, next_max + inc)
+        price = max(price, opening)
+        winners_map = {}
+        for i in range(K):
+            _, __, bidder_id = units[i]
+            winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+        # leader = bidder with the top unit
+        top_bidder = units[0][2]
+        return top_bidder, price, True, winners_map
 
-    # Create bid atomically and re-check top in case of race
     try:
         with transaction.atomic():
-            # Lock row and recompute requirement in transaction
             locked_item = Item.objects.select_for_update().get(pk=item.pk)
-            locked_top = locked_item.bids.order_by("-amount", "-created_at").first()
-            if locked_top:
-                incr2 = locked_item.bid_increment if locked_item.bid_increment is not None else standard_increment(locked_top.amount)
-                min_req2 = (locked_top.amount or Decimal("0")) + Decimal(incr2)
-            else:
-                min_req2 = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
-            if amount < min_req2:
-                messages.error(request, f"Another bid just came in. Minimum is now {min_req2}.")
-                return redirect("auctions:item_detail", slug=locked_item.slug)
 
-            from .models import Bid  # local import to avoid circulars at import time
-            Bid.objects.create(item=locked_item, bidder=request.user, amount=amount, idempotency_key=idem)
-    except IntegrityError:
-        # Treat duplicate idempotent submission as success
-        messages.info(request, "Duplicate submission ignored.")
+            from .models import ProxyBid, Bid  # local import to avoid circulars
+
+            # Current state before change
+            prev_top = locked_item.bids.order_by("-amount", "-created_at").first()
+            prev_leader, prev_price, prev_full, prev_winners = compute_current_state(locked_item)
+
+            # Upsert user's proxy bid
+            pb, created = ProxyBid.objects.select_for_update().get_or_create(
+                item=locked_item, bidder=request.user, defaults={"max_amount": max_amount, "seats": req_seats}
+            )
+            changed = False
+            if not created and max_amount > pb.max_amount:
+                pb.max_amount = max_amount
+                changed = True
+            # update requested seats if changed
+            if getattr(pb, "seats", 1) != req_seats:
+                pb.seats = req_seats
+                changed = True
+            if changed:
+                pb.save(update_fields=["max_amount", "seats", "updated_at"]) if hasattr(pb, "seats") else pb.save(update_fields=["max_amount", "updated_at"])
+
+            # Recompute after change
+            new_leader, new_price, new_full, new_winners = compute_current_state(locked_item)
+
+            # Validation:
+            # - If not full before, require at least opening minimum
+            # - If full before and user is not among new winners, guidance: need at least prev_price + increment(prev_price)
+            if not prev_full:
+                opening_req = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
+                if max_amount < opening_req:
+                    messages.error(request, f"Your maximum must be at least {opening_req}.")
+                    return redirect("auctions:item_detail", slug=locked_item.slug)
+            else:
+                if request.user.id not in new_winners:
+                    min_next = prev_price + Decimal(get_increment(prev_price))
+                    if max_amount < min_next and (not created and max_amount <= pb.max_amount):
+                        messages.error(request, f"Your maximum must be at least {min_next} to secure a spot.")
+                        return redirect("auctions:item_detail", slug=locked_item.slug)
+
+            # If the public price/leader changed, record a Bid row for audit/visibility
+            should_write_bid = (
+                (prev_top is None) or (Decimal(prev_top.amount) != new_price) or (prev_leader != new_leader)
+            )
+            if should_write_bid and new_leader is not None:
+                # new_leader is a bidder_id from compute_current_state
+                Bid.objects.create(item=locked_item, bidder_id=new_leader, amount=new_price)
+
     except Exception:
         messages.error(request, "Unable to place bid right now. Please try again.")
         return redirect("auctions:item_detail", slug=item.slug)
 
-    messages.success(request, "Your bid has been placed.")
+    # Messaging
+    # Messaging considers seat allocation rather than only top leader
+    prev_won = 0
+    new_won = 0
+    try:
+        prev_won = prev_winners.get(request.user.id, 0)
+        new_won = new_winners.get(request.user.id, 0)
+    except Exception:
+        prev_won = 0
+        new_won = 0
+    if new_won > 0:
+        if prev_won > 0:
+            messages.success(request, f"Your maximum was updated. You're still winning {new_won} seat(s).")
+        else:
+            messages.success(request, f"You're now winning {new_won} seat(s).")
+    else:
+        messages.info(request, "Your maximum was recorded, but you're not winning a seat yet.")
+
     return redirect("auctions:item_detail", slug=item.slug)
 
 @manager_required
@@ -413,41 +514,259 @@ def account_tab_offered(request):
 
 @login_required
 def account_tab_winning(request):
-    """Items where the user's bid is currently top (winning) or the user won (closed)."""
-    from .models import Bid  # local import
+    """Items where the user is currently winning one or more seats."""
+    from .models import ProxyBid, Bid  # local import
 
-    top_amount_sq = Bid.objects.filter(item=OuterRef("pk")).order_by("-amount", "-created_at").values("amount")[:1]
-    top_bidder_sq = Bid.objects.filter(item=OuterRef("pk")).order_by("-amount", "-created_at").values("bidder_id")[:1]
+    def get_increment(base: Decimal, item: Item) -> Decimal:
+        return item.bid_increment if item.bid_increment is not None else standard_increment(base)
 
-    items = (
+    def compute_current_state(locked_item: Item):
+        proxies = list(
+            ProxyBid.objects.filter(item=locked_item).order_by("-max_amount", "updated_at")
+        )
+        opening = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
+        K = max(1, int(locked_item.quantity_total or 1))
+        units = []  # (amount, updated_at, bidder_id)
+        for p in proxies:
+            seats = max(1, int(getattr(p, "seats", 1) or 1))
+            amt = Decimal(p.max_amount)
+            for _ in range(seats):
+                units.append((amt, p.updated_at, p.bidder_id))
+        if not units:
+            return None, opening, False, {}
+        units.sort(key=lambda t: (t[0] * -1, t[1]))
+        if len(units) <= K:
+            winners_map = {}
+            for _, __, bidder_id in units:
+                winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+            top_bidder = units[0][2]
+            return top_bidder, opening, False, winners_map
+        kth_max = Decimal(units[K - 1][0])
+        next_max = Decimal(units[K][0])
+        inc = Decimal(get_increment(next_max, locked_item))
+        price = min(kth_max, next_max + inc)
+        price = max(price, opening)
+        winners_map = {}
+        for i in range(K):
+            _, __, bidder_id = units[i]
+            winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+        top_bidder = units[0][2]
+        return top_bidder, price, True, winners_map
+
+    # Candidate items: where user has a proxy or has bid on; exclude fixed-price
+    items_qs = (
         Item.objects.select_related("auction", "category")
-        .filter(bids__bidder=request.user)
         .exclude(type=Item.TYPE_FIXED_PRICE)
-        .annotate(top_amount=Subquery(top_amount_sq), top_bidder_id=Subquery(top_bidder_sq))
-        .filter(top_bidder_id=request.user.id)
+        .filter(
+            Q(proxy_bids__bidder=request.user) | Q(bids__bidder=request.user)
+        )
         .order_by("title")
         .distinct()
     )
+    items = []
+    # Annotate each item with my_won_seats, current_price, my_max
+    for it in items_qs:
+        _, public_price, _, winners_map = compute_current_state(it)
+        my_won = winners_map.get(request.user.id, 0)
+        if my_won > 0:
+            it.my_won_seats = my_won
+            it.current_price = public_price
+            it.my_max = (
+                ProxyBid.objects.filter(item=it, bidder=request.user).values_list("max_amount", flat=True).first()
+            )
+            items.append(it)
     return render(request, "auctions/partials/account_tab_winning.html", {"items": items})
 
 
 @login_required
 def account_tab_outbid(request):
-    """Items the user bid on but is not currently the top bidder."""
-    from .models import Bid  # local import
+    """Items the user has bid on but is currently winning 0 seats."""
+    from .models import ProxyBid, Bid  # local import
 
-    top_bidder_sq = Bid.objects.filter(item=OuterRef("pk")).order_by("-amount", "-created_at").values("bidder_id")[:1]
+    def get_increment(base: Decimal, item: Item) -> Decimal:
+        return item.bid_increment if item.bid_increment is not None else standard_increment(base)
 
-    items = (
+    def compute_current_state(locked_item: Item):
+        proxies = list(
+            ProxyBid.objects.filter(item=locked_item).order_by("-max_amount", "updated_at")
+        )
+        opening = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
+        K = max(1, int(locked_item.quantity_total or 1))
+        units = []
+        for p in proxies:
+            seats = max(1, int(getattr(p, "seats", 1) or 1))
+            amt = Decimal(p.max_amount)
+            for _ in range(seats):
+                units.append((amt, p.updated_at, p.bidder_id))
+        if not units:
+            return None, opening, False, {}
+        units.sort(key=lambda t: (t[0] * -1, t[1]))
+        if len(units) <= K:
+            winners_map = {}
+            for _, __, bidder_id in units:
+                winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+            top_bidder = units[0][2]
+            return top_bidder, opening, False, winners_map
+        kth_max = Decimal(units[K - 1][0])
+        next_max = Decimal(units[K][0])
+        inc = Decimal(get_increment(next_max, locked_item))
+        price = min(kth_max, next_max + inc)
+        price = max(price, opening)
+        winners_map = {}
+        for i in range(K):
+            _, __, bidder_id = units[i]
+            winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+        top_bidder = units[0][2]
+        return top_bidder, price, True, winners_map
+
+    items_qs = (
         Item.objects.select_related("auction", "category")
-        .filter(bids__bidder=request.user)
         .exclude(type=Item.TYPE_FIXED_PRICE)
-        .annotate(top_bidder_id=Subquery(top_bidder_sq))
-        .exclude(top_bidder_id=request.user.id)
+        .filter(
+            Q(proxy_bids__bidder=request.user) | Q(bids__bidder=request.user)
+        )
         .order_by("title")
         .distinct()
     )
+    items = []
+    for it in items_qs:
+        _, public_price, _, winners_map = compute_current_state(it)
+        my_won = winners_map.get(request.user.id, 0)
+        if my_won == 0:
+            it.current_price = public_price
+            it.my_max = (
+                ProxyBid.objects.filter(item=it, bidder=request.user).values_list("max_amount", flat=True).first()
+            )
+            items.append(it)
     return render(request, "auctions/partials/account_tab_outbid.html", {"items": items})
+
+
+@login_required
+def account_update_proxy_max(request, slug):
+    """Allow a user to increase their proxy max for an item from the account page.
+
+    Accepts POST with 'amount'. On success, refreshes the winning or outbid tab via HTMX,
+    or redirects back to account_home otherwise.
+    """
+    if request.method != "POST":
+        return redirect("auctions:account_home")
+
+    item = get_object_or_404(Item.objects.select_related("auction"), slug=slug)
+    if item.status != Item.STATUS_PUBLISHED or item.type == Item.TYPE_FIXED_PRICE:
+        messages.error(request, "Bidding is not allowed on this item.")
+        return redirect("auctions:account_home")
+
+    raw_amount = (request.POST.get("amount") or "").strip()
+    try:
+        new_max = Decimal(raw_amount)
+    except Exception:
+        messages.error(request, "Enter a valid amount.")
+        return redirect("auctions:account_home")
+
+    def get_increment(base: Decimal) -> Decimal:
+        return item.bid_increment if item.bid_increment is not None else standard_increment(base)
+
+    def compute_current_state(locked_item):
+        from .models import ProxyBid  # local import
+        proxies = list(
+            ProxyBid.objects.filter(item=locked_item).select_for_update().order_by("-max_amount", "updated_at")
+        )
+        opening = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
+        K = int(locked_item.quantity_total or 1)
+        K = max(1, K)
+        units = []
+        for p in proxies:
+            seats = max(1, int(getattr(p, "seats", 1) or 1))
+            amt = Decimal(p.max_amount)
+            for _ in range(seats):
+                units.append((amt, p.updated_at, p.bidder_id))
+        if not units:
+            return None, opening, False, {}
+        units.sort(key=lambda t: (t[0] * -1, t[1]))
+        if len(units) <= K:
+            winners_map = {}
+            for _, __, bidder_id in units[:]:
+                winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+            top_bidder = proxies[0].bidder if proxies else None
+            return top_bidder, opening, False, winners_map
+        kth_max = Decimal(units[K - 1][0])
+        next_max = Decimal(units[K][0])
+        inc = Decimal(get_increment(next_max))
+        price = min(kth_max, next_max + inc)
+        price = max(price, opening)
+        winners_map = {}
+        for i in range(K):
+            _, __, bidder_id = units[i]
+            winners_map[bidder_id] = winners_map.get(bidder_id, 0) + 1
+        top_bidder = units[0][2]
+        return top_bidder, price, True, winners_map
+
+    try:
+        with transaction.atomic():
+            locked_item = Item.objects.select_for_update().get(pk=item.pk)
+            from .models import ProxyBid, Bid  # local import
+
+            prev_top = locked_item.bids.order_by("-amount", "-created_at").first()
+            prev_leader, prev_price, prev_full, prev_winners = compute_current_state(locked_item)
+
+            # opening minimum validation when not full previously
+            if not prev_full:
+                opening_req = Decimal(locked_item.opening_min_bid or Decimal("1.00"))
+                if new_max < opening_req:
+                    messages.error(request, f"Your maximum must be at least {opening_req}.")
+                    return redirect("auctions:account_home")
+
+            pb, created = ProxyBid.objects.select_for_update().get_or_create(
+                item=locked_item, bidder=request.user, defaults={"max_amount": new_max}
+            )
+            if not created and new_max > pb.max_amount:
+                pb.max_amount = new_max
+                pb.save(update_fields=["max_amount", "updated_at"])
+
+            new_leader, new_price, new_full, new_winners = compute_current_state(locked_item)
+
+            if prev_full and (new_winners.get(request.user.id, 0) == 0):
+                min_next = prev_price + Decimal(get_increment(prev_price))
+                if new_max < min_next and (not created and new_max <= pb.max_amount):
+                    messages.error(request, f"Your maximum must be at least {min_next} to secure a spot.")
+                    return redirect("auctions:account_home")
+
+            should_write_bid = (
+                (prev_top is None) or (Decimal(prev_top.amount) != new_price) or (prev_leader != new_leader)
+            )
+            if should_write_bid and new_leader is not None:
+                # new_leader is a bidder_id from compute_current_state
+                Bid.objects.create(item=locked_item, bidder_id=new_leader, amount=new_price)
+
+    except Exception:
+        messages.error(request, "Unable to update your maximum right now. Please try again.")
+        if request.headers.get("HX-Request") == "true":
+            # best-effort refresh
+            return account_tab_winning(request)
+        return redirect("auctions:account_home")
+
+    # Seat-aware messaging
+    try:
+        prev_won = prev_winners.get(request.user.id, 0)
+        new_won = new_winners.get(request.user.id, 0)
+    except Exception:
+        prev_won = 0
+        new_won = 0
+    if new_won > 0:
+        if prev_won > 0:
+            messages.success(request, f"Your maximum was updated. You're still winning {new_won} seat(s).")
+        else:
+            messages.success(request, f"You're now winning {new_won} seat(s).")
+    else:
+        messages.info(request, "Your maximum was recorded, but you're not winning a seat yet.")
+
+    if request.headers.get("HX-Request") == "true":
+        # Refresh appropriate tab based on current outcome
+        if new_won > 0:
+            return account_tab_winning(request)
+        else:
+            return account_tab_outbid(request)
+    return redirect("auctions:account_home")
 
 
 @login_required
@@ -576,6 +895,49 @@ def fixed_price_signup(request, slug):
         ctx = {"item": item, "can_signup": can_signup, "user_signup": user_signup, "spots_left": spots_left}
         return render(request, "auctions/partials/signup_section.html", ctx)
     return redirect("auctions:item_detail", slug=slug)
+
+
+@csrf_exempt
+@manager_required
+def send_test_sms(request):
+    """Send a test SMS via Telnyx to verify credentials.
+
+    POST body params:
+      - to: E.164 destination number (e.g., +15551234567)
+      - text (optional): message text (default: 'Test from auction app')
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    import os
+    to = (request.POST.get("to") or "").strip()
+    if not to:
+        return JsonResponse({"error": "Missing 'to' parameter"}, status=400)
+    text = (request.POST.get("text") or "Test from auction app").strip()
+    api_key = os.environ.get("TELNYX_API_KEY")
+    profile_id = os.environ.get("TELNYX_MESSAGING_PROFILE_ID")
+    from_number = os.environ.get("TELNYX_FROM_NUMBER")
+    if not api_key:
+        return JsonResponse({"error": "TELNYX_API_KEY not configured"}, status=500)
+    if not (profile_id or from_number):
+        return JsonResponse({"error": "TELNYX_MESSAGING_PROFILE_ID or TELNYX_FROM_NUMBER must be set"}, status=500)
+    try:
+        import telnyx
+        telnyx.api_key = api_key
+        if profile_id:
+            msg = telnyx.Message.create(
+                to=to,
+                messaging_profile_id=profile_id,
+                text=text,
+            )
+        else:
+            msg = telnyx.Message.create(
+                to=to,
+                from_=from_number,
+                text=text,
+            )
+        return JsonResponse({"ok": True, "message_id": getattr(msg, "id", None)}, status=200)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 @login_required

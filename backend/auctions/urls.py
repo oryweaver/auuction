@@ -57,6 +57,10 @@ urlpatterns = [
     path("accounts/items/new/", views.donor_item_create, name="donor_item_create"),
     path("accounts/items/<slug:slug>/edit/", views.donor_item_edit, name="donor_item_edit"),
     path("accounts/items/<slug:slug>/publish/", views.manager_publish_item, name="manager_publish_item"),
+    path("accounts/items/<slug:slug>/proxy-max/", views.account_update_proxy_max, name="account_update_proxy_max"),
+    path("accounts/manage/test-sms/", views.send_test_sms, name="send_test_sms"),
+    # Webhooks
+    path("webhooks/telnyx/", views.telnyx_inbound_webhook, name="telnyx_webhook"),
     # Account tabs
     path("accounts/tab/offered/", views.account_tab_offered, name="account_tab_offered"),
     path("accounts/tab/winning/", views.account_tab_winning, name="account_tab_winning"),

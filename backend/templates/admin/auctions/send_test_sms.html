@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block content %}
+<div id="content" class="content">
+  <h1>{{ title }}</h1>
+
+  {% if messages %}
+    <ul class="messagelist">
+      {% for message in messages %}
+        <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+
+  <form method="post" novalidate>
+    {% csrf_token %}
+    <fieldset class="module aligned">
+      <div class="form-row">
+        <label for="id_to"><strong>To (E.164)</strong></label>
+        <input type="text" name="to" id="id_to" placeholder="+15551234567" style="width: 22em" required />
+      </div>
+      <div class="form-row">
+        <label for="id_text"><strong>Text</strong></label>
+        <textarea name="text" id="id_text" rows="3" cols="60" placeholder="Test from auction admin"></textarea>
+      </div>
+    </fieldset>
+    <div class="submit-row">
+      <input type="submit" value="Send SMS" class="default" />
+    </div>
+  </form>
+</div>
+{% endblock %}
