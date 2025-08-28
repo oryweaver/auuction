@@ -54,6 +54,13 @@
       </div>
     </div>
 
+    <div class="field">
+      {{ form.captcha }}
+      {% if form.captcha.errors %}
+        <div class="errorlist">{{ form.captcha.errors }}</div>
+      {% endif %}
+    </div>
+
     <div class="actions">
       <button type="submit">Create account</button>
       <span class="muted">Already have an account?</span>
