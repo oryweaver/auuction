@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404, render
-from django.db.models import Prefetch, Sum, Q
+from django.db.models import Prefetch, Sum, Q, OuterRef, Subquery
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
@@ -398,6 +398,56 @@ def logout_view(request):
 @login_required
 def account_home(request):
     return render(request, "auctions/account_home.html", {})
+
+
+@login_required
+def account_tab_offered(request):
+    """Items offered/donated by the current user."""
+    items = (
+        Item.objects.select_related("auction", "category")
+        .filter(donor=request.user)
+        .order_by("-created_at")
+    )
+    return render(request, "auctions/partials/account_tab_offered.html", {"items": items})
+
+
+@login_required
+def account_tab_winning(request):
+    """Items where the user's bid is currently top (winning) or the user won (closed)."""
+    from .models import Bid  # local import
+
+    top_amount_sq = Bid.objects.filter(item=OuterRef("pk")).order_by("-amount", "-created_at").values("amount")[:1]
+    top_bidder_sq = Bid.objects.filter(item=OuterRef("pk")).order_by("-amount", "-created_at").values("bidder_id")[:1]
+
+    items = (
+        Item.objects.select_related("auction", "category")
+        .filter(bids__bidder=request.user)
+        .exclude(type=Item.TYPE_FIXED_PRICE)
+        .annotate(top_amount=Subquery(top_amount_sq), top_bidder_id=Subquery(top_bidder_sq))
+        .filter(top_bidder_id=request.user.id)
+        .order_by("title")
+        .distinct()
+    )
+    return render(request, "auctions/partials/account_tab_winning.html", {"items": items})
+
+
+@login_required
+def account_tab_outbid(request):
+    """Items the user bid on but is not currently the top bidder."""
+    from .models import Bid  # local import
+
+    top_bidder_sq = Bid.objects.filter(item=OuterRef("pk")).order_by("-amount", "-created_at").values("bidder_id")[:1]
+
+    items = (
+        Item.objects.select_related("auction", "category")
+        .filter(bids__bidder=request.user)
+        .exclude(type=Item.TYPE_FIXED_PRICE)
+        .annotate(top_bidder_id=Subquery(top_bidder_sq))
+        .exclude(top_bidder_id=request.user.id)
+        .order_by("title")
+        .distinct()
+    )
+    return render(request, "auctions/partials/account_tab_outbid.html", {"items": items})
 
 
 @login_required

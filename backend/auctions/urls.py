@@ -57,4 +57,8 @@ urlpatterns = [
     path("accounts/items/new/", views.donor_item_create, name="donor_item_create"),
     path("accounts/items/<slug:slug>/edit/", views.donor_item_edit, name="donor_item_edit"),
     path("accounts/items/<slug:slug>/publish/", views.manager_publish_item, name="manager_publish_item"),
+    # Account tabs
+    path("accounts/tab/offered/", views.account_tab_offered, name="account_tab_offered"),
+    path("accounts/tab/winning/", views.account_tab_winning, name="account_tab_winning"),
+    path("accounts/tab/outbid/", views.account_tab_outbid, name="account_tab_outbid"),
 ]

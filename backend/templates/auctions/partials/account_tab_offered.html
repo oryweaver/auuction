@@ -1,0 +1,15 @@
+{% if items %}
+  <ul>
+    {% for item in items %}
+      <li class="item-card" style="margin:.5rem 0;">
+        <strong><a href="{% url 'auctions:item_detail' slug=item.slug %}">{{ item.title }}</a></strong>
+        <div style="font-size:.9rem; color:#6b7280;">
+          {{ item.get_type_display }} · Status: {{ item.get_status_display }}
+          {% if item.category %} · {{ item.category.name }}{% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>You haven't offered any items yet. <a href="{% url 'auctions:donor_item_create' %}">Submit an item</a>.</p>
+{% endif %}

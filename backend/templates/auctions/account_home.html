@@ -1,8 +1,55 @@
-<!doctype html>
-<html>
-  <body>
-    <h1>My Account</h1>
-    <p>Welcome, {{ request.user.first_name|default:request.user.email }}</p>
-    <p><a href="{% url 'auctions:logout' %}">Logout</a></p>
-  </body>
-</html>
+{% extends "auctions/base.html" %}
+{% load static %}
+
+{% block title %}My Account · aUUction{% endblock %}
+{% block subtitle %}Your items, bids, and signups{% endblock %}
+
+{% block content %}
+  <h2>My Account</h2>
+  <p>Welcome, {{ request.user.first_name|default:request.user.email }}</p>
+
+  <nav style="margin-top:1rem;">
+    <ul role="tablist" style="display:flex; gap:.5rem; list-style:none; padding:0;">
+      <li>
+        <a href="#"
+           role="tab"
+           aria-selected="true"
+           hx-get="{% url 'auctions:account_tab_offered' %}"
+           hx-target="#account-tab-panel"
+           hx-swap="innerHTML"
+           class="contrast"
+           onclick="selectTab(this); return false;">Offered</a>
+      </li>
+      <li>
+        <a href="#"
+           role="tab"
+           aria-selected="false"
+           hx-get="{% url 'auctions:account_tab_winning' %}"
+           hx-target="#account-tab-panel"
+           hx-swap="innerHTML"
+           onclick="selectTab(this); return false;">Winning/Won</a>
+      </li>
+      <li>
+        <a href="#"
+           role="tab"
+           aria-selected="false"
+           hx-get="{% url 'auctions:account_tab_outbid' %}"
+           hx-target="#account-tab-panel"
+           hx-swap="innerHTML"
+           onclick="selectTab(this); return false;">Outbid</a>
+      </li>
+    </ul>
+  </nav>
+
+  <div id="account-tab-panel" class="item-list" hx-get="{% url 'auctions:account_tab_offered' %}" hx-trigger="load" hx-swap="innerHTML">
+    <p>Loading…</p>
+  </div>
+
+  <script>
+    function selectTab(el){
+      var tabs = el.closest('nav').querySelectorAll('[role="tab"]');
+      tabs.forEach(function(t){ t.setAttribute('aria-selected', 'false'); });
+      el.setAttribute('aria-selected', 'true');
+    }
+  </script>
+{% endblock %}
